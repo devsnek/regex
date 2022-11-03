@@ -257,6 +257,14 @@ impl<'a, 'm, 'r, 's, I: Input> Bounded<'a, 'm, 'r, 's, I> {
                     }
                     return false;
                 }
+                Specialization(ref inst) => {
+                    if inst.matches(at.char()) {
+                        ip = inst.goto;
+                        at = self.input.at(at.next_pos());
+                    } else {
+                        return false;
+                    }
+                },
             }
         }
     }

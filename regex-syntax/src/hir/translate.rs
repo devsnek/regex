@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::result;
 
 use crate::ast::{self, Ast, Span, Visitor};
-use crate::hir::{self, Error, ErrorKind, Hir};
+use crate::hir::{self, Error, ErrorKind, Hir, SpecializationKind};
 use crate::unicode::{self, ClassQuery};
 
 type Result<T> = result::Result<T, Error>;
@@ -300,10 +300,18 @@ impl<'t, 'p> Visitor for TranslatorI<'t, 'p> {
                 self.push(HirFrame::Expr(self.hir_assertion(x)?));
             }
             Ast::Class(ast::Class::Perl(ref x)) => {
+                use crate::ast::ClassPerlKind::*;
+
                 if self.flags().unicode() {
-                    let cls = self.hir_perl_unicode_class(x)?;
-                    let hcls = hir::Class::Unicode(cls);
-                    self.push(HirFrame::Expr(Hir::class(hcls)));
+                    if x.kind == Word {
+                        self.push(HirFrame::Expr(Hir::specialization(SpecializationKind::PerlWord {
+                            negated: x.negated,
+                        })));
+                    } else {
+                        let cls = self.hir_perl_unicode_class(x)?;
+                        let hcls = hir::Class::Unicode(cls);
+                        self.push(HirFrame::Expr(Hir::class(hcls)));
+                    }
                 } else {
                     let cls = self.hir_perl_byte_class(x);
                     let hcls = hir::Class::Bytes(cls);

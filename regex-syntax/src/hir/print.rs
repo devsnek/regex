@@ -5,7 +5,7 @@ This module provides a regular expression printer for `Hir`.
 use std::fmt;
 
 use crate::hir::visitor::{self, Visitor};
-use crate::hir::{self, Hir, HirKind};
+use crate::hir::{self, Hir, HirKind, SpecializationKind};
 use crate::is_meta_character;
 
 /// A builder for constructing a printer.
@@ -155,6 +155,9 @@ impl<W: fmt::Write> Visitor for Writer<W> {
                     self.wtr.write_str("(?:")?;
                 }
             },
+            HirKind::Specialization(SpecializationKind::PerlWord { negated }) => {
+                self.wtr.write_str(if negated { "\\W" } else { "\\w" })?;
+            }
         }
         Ok(())
     }
@@ -168,7 +171,8 @@ impl<W: fmt::Write> Visitor for Writer<W> {
             | HirKind::Anchor(_)
             | HirKind::WordBoundary(_)
             | HirKind::Concat(_)
-            | HirKind::Alternation(_) => {}
+            | HirKind::Alternation(_)
+            | HirKind::Specialization(_) => {}
             HirKind::Repetition(ref x) => {
                 match x.kind {
                     hir::RepetitionKind::ZeroOrOne => {

@@ -262,6 +262,12 @@ impl<'r, I: Input> Fsm<'r, I> {
                 }
                 false
             }
+            Specialization(ref inst) => {
+                if inst.matches(at.char()) {
+                    self.add(nlist, thread_caps, inst.goto, at_next);
+                }
+                false
+            }
             EmptyLook(_) | Save(_) | Split(_) => false,
         }
     }
@@ -301,6 +307,7 @@ impl<'r, I: Input> Fsm<'r, I> {
         // absolutely need recursion (restoring captures or following a
         // branch).
         use crate::prog::Inst::*;
+        use crate::prog::{InstSpecialization, SpecializationKind};
         loop {
             // Don't visit states we've already added.
             if nlist.set.contains(ip) {
@@ -327,7 +334,7 @@ impl<'r, I: Input> Fsm<'r, I> {
                     self.stack.push(FollowEpsilon::IP(inst.goto2));
                     ip = inst.goto1;
                 }
-                Match(_) | Char(_) | Ranges(_) | Bytes(_) => {
+                Match(_) | Char(_) | Ranges(_) | Bytes(_) | Specialization(InstSpecialization { kind: SpecializationKind::PerlWord { .. }, .. }) => {
                     let t = &mut nlist.caps(ip);
                     for (slot, val) in t.iter_mut().zip(thread_caps.iter()) {
                         *slot = *val;

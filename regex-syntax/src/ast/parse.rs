@@ -719,7 +719,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     fn pop_group(&self, mut group_concat: ast::Concat) -> Result<ast::Concat> {
         use self::GroupState::*;
 
-        assert_eq!(self.char(), ')');
+        // assert_eq!(self.char(), ')');
         let mut stack = self.parser().stack_group.borrow_mut();
         let (mut prior_concat, mut group, ignore_whitespace, alt) = match stack
             .pop()
@@ -968,8 +968,44 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                 ')' => concat = self.pop_group(concat)?,
                 '|' => concat = self.push_alternate(concat)?,
                 '[' => {
-                    let class = self.parse_set_class()?;
+                    let (class, disjunction) = self.parse_set_class()?;
+                    let has_alternates = !disjunction.is_empty();
+                    if has_alternates {
+                        // push_group
+                        {
+                            let group = ast::Group {
+                                span: self.span(),
+                                kind: ast::GroupKind::NonCapturing(ast::Flags {
+                                    span: self.span(),
+                                    items: vec![],
+                                }),
+                                ast: Box::new(Ast::Empty(self.span())),
+                            };
+                            let old_ignore_whitespace = self.ignore_whitespace();
+                            self.parser().stack_group.borrow_mut().push(
+                                GroupState::Group {
+                                    concat,
+                                    group,
+                                    ignore_whitespace: old_ignore_whitespace,
+                                },
+                            );
+                            concat = ast::Concat { span: self.span(), asts: vec![] };
+                        }
+
+                        for item in disjunction {
+                            concat.asts.push(item);
+                            // push_alternate
+                            {
+                                concat.span.end = self.pos();
+                                self.push_or_add_alternation(concat);
+                                concat = ast::Concat { span: self.span(), asts: vec![] };
+                            }
+                        }
+                    }
                     concat.asts.push(Ast::Class(class));
+                    if has_alternates {
+                        concat = self.pop_group(concat)?;
+                    }
                 }
                 '?' => {
                     concat = self.parse_uncounted_repetition(
@@ -1736,9 +1772,10 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
     /// is successful, then the parser is advanced to the position immediately
     /// following the closing `]`.
     #[inline(never)]
-    fn parse_set_class(&self) -> Result<ast::Class> {
+    fn parse_set_class(&self) -> Result<(ast::Class, Vec<Ast>)> {
         assert_eq!(self.char(), '[');
 
+        let mut disjunction = vec![];
         let mut union =
             ast::ClassSetUnion { span: self.span(), items: vec![] };
         loop {
@@ -1764,7 +1801,7 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                     Either::Left(nested_union) => {
                         union = nested_union;
                     }
-                    Either::Right(class) => return Ok(class),
+                    Either::Right(class) => return Ok((class, disjunction)),
                 },
                 '&' if self.peek() == Some('&') => {
                     assert!(self.bump_if("&&"));
@@ -1788,7 +1825,12 @@ impl<'s, P: Borrow<Parser>> ParserI<'s, P> {
                     );
                 }
                 _ => {
-                    union.push(self.parse_set_class_range()?);
+                    match self.parse_set_class_range()? {
+                        ast::ClassSetItem::Perl(v) => {
+                            disjunction.push(Ast::Class(ast::Class::Perl(v)));
+                        }
+                        range => union.push(range),
+                    }
                 }
             }
         }

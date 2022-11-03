@@ -10,7 +10,7 @@ use regex_syntax::utf8::{Utf8Range, Utf8Sequence, Utf8Sequences};
 
 use crate::prog::{
     EmptyLook, Inst, InstBytes, InstChar, InstEmptyLook, InstPtr, InstRanges,
-    InstSave, InstSplit, Program,
+    InstSave, InstSplit, Program, InstSpecialization, SpecializationKind,
 };
 
 use crate::Error;
@@ -268,6 +268,7 @@ impl Compiler {
     fn c(&mut self, expr: &Hir) -> ResultOrEmpty {
         use crate::prog;
         use regex_syntax::hir::HirKind::*;
+        use regex_syntax::hir::SpecializationKind::*;
 
         self.check_size()?;
         match *expr.kind() {
@@ -386,6 +387,12 @@ impl Compiler {
             }
             Alternation(ref es) => self.c_alternate(&**es),
             Repetition(ref rep) => self.c_repeat(rep),
+            Specialization(PerlWord { negated }) => {
+                let hole = self.push_hole(InstHole::Specialization {
+                    kind: SpecializationKind::PerlWord { negated },
+                });
+                Ok(Some(Patch { hole, entry: self.insts.len() - 1 }))
+            },
         }
     }
 
@@ -954,6 +961,7 @@ enum InstHole {
     Char { c: char },
     Ranges { ranges: Vec<(char, char)> },
     Bytes { start: u8, end: u8 },
+    Specialization { kind: SpecializationKind }
 }
 
 impl InstHole {
@@ -970,6 +978,12 @@ impl InstHole {
             }),
             InstHole::Bytes { start, end } => {
                 Inst::Bytes(InstBytes { goto, start, end })
+            }
+            InstHole::Specialization { ref kind } => {
+                Inst::Specialization(InstSpecialization {
+                    goto,
+                    kind: kind.clone(),
+                })
             }
         }
     }

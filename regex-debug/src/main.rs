@@ -4,6 +4,7 @@ use std::process;
 use std::result;
 
 use docopt::Docopt;
+use regex::Regex;
 use regex::internal::{Compiler, LiteralSearcher};
 use regex_syntax::hir::literal::Literals;
 use regex_syntax::hir::Hir;
@@ -19,6 +20,7 @@ Usage:
     regex-debug [options] compile <patterns> ...
     regex-debug [options] utf8-ranges <class>
     regex-debug [options] utf8-ranges-rev <class>
+    regex-debug [options] matches <pattern> <text>
     regex-debug --help
 
 Options:
@@ -58,10 +60,12 @@ struct Args {
     cmd_compile: bool,
     cmd_utf8_ranges: bool,
     cmd_utf8_ranges_rev: bool,
+    cmd_matches: bool,
 
     arg_pattern: String,
     arg_patterns: Vec<String>,
     arg_class: String,
+    arg_text: String,
 
     flag_size_limit: usize,
     flag_bytes: bool,
@@ -114,6 +118,8 @@ fn run(args: &Args) -> Result<()> {
         cmd_utf8_ranges(args)
     } else if args.cmd_utf8_ranges_rev {
         cmd_utf8_ranges_rev(args)
+    } else if args.cmd_matches {
+        cmd_matches(args)
     } else {
         unreachable!()
     }
@@ -133,6 +139,7 @@ fn cmd_hir(args: &Args) -> Result<()> {
 
     let mut parser = ParserBuilder::new().allow_invalid_utf8(false).build();
     let hir = parser.parse(&args.arg_pattern)?;
+    println!("{}", hir);
     println!("{:#?}", hir);
     Ok(())
 }
@@ -284,6 +291,16 @@ fn cmd_utf8_ranges_rev(args: &Args) -> Result<()> {
         println!();
     }
     println!("codepoint count: {}", char_count);
+    Ok(())
+}
+
+fn cmd_matches(args: &Args) -> Result<()> {
+    let re = Regex::new(&args.arg_pattern)?;
+
+    for mat in re.find_iter(&args.arg_text) {
+        println!("{}-{} \"{}\"", mat.start(), mat.end(), mat.as_str());
+    }
+
     Ok(())
 }
 

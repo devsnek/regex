@@ -380,6 +380,13 @@ impl Char {
         char::from_u32(self.0).map_or(false, regex_syntax::is_word_character)
     }
 
+    /// Returns true iff the character is not a word character.
+    ///
+    /// If the character is absent, then false is returned.
+    pub fn is_not_word_char(self) -> bool {
+        char::from_u32(self.0).map_or(false, |c| !regex_syntax::is_word_character(c))
+    }
+
     /// Returns true iff the byte is a word byte.
     ///
     /// If the byte is absent, then false is returned.

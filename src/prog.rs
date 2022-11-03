@@ -229,6 +229,10 @@ impl fmt::Debug for Program {
                     );
                     write!(f, "{:04} {}", pc, with_goto(pc, inst.goto, s))?;
                 }
+                Specialization(ref inst) => {
+                    let s = format!("{:?}", inst.kind);
+                    write!(f, "{:04} {}", pc, with_goto(pc, inst.goto, s))?;
+                }
             }
             if pc == self.start {
                 write!(f, " (start)")?;
@@ -293,6 +297,9 @@ pub enum Inst {
     /// used in conjunction with Split instructions to implement multi-byte
     /// character classes.
     Bytes(InstBytes),
+    /// Specializations are portions of a regex program which receive special
+    /// treatment in the interpreter.
+    Specialization(InstSpecialization),
 }
 
 impl Inst {
@@ -431,6 +438,39 @@ impl InstBytes {
     pub fn matches(&self, byte: u8) -> bool {
         self.start <= byte && byte <= self.end
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct InstSpecialization {
+    /// The next location to execute in the program if this instruction
+    /// succeeds.
+    pub goto: InstPtr,
+    /// The specialization kind.
+    pub kind: SpecializationKind,
+}
+
+impl InstSpecialization {
+    /// Tests whether the given input character matches this instruction.
+    pub fn matches(&self, c: Char) -> bool {
+        match self.kind {
+            SpecializationKind::PerlWord { negated } => {
+                if negated {
+                    c.is_not_word_char()
+                } else {
+                    c.is_word_char()
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum SpecializationKind {
+    /// `\w`
+    PerlWord {
+        /// `\W`
+        negated: bool
+    },
 }
 
 #[cfg(test)]

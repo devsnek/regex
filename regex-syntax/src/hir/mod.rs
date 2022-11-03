@@ -212,6 +212,18 @@ pub enum HirKind {
     /// An alternation matches only if at least one of its child expression
     /// matches. If multiple expressions match, then the leftmost is preferred.
     Alternation(Vec<Hir>),
+    /// A special form, for example `\w`
+    Specialization(SpecializationKind),
+}
+
+/// A special form, for example `\w`
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SpecializationKind {
+    /// `\w`
+    PerlWord {
+        /// `\W`
+        negated: bool
+    },
 }
 
 impl Hir {
@@ -589,6 +601,26 @@ impl Hir {
         }
     }
 
+    /// aaaa
+    pub fn specialization(kind: SpecializationKind) -> Hir {
+        let mut info = HirInfo::new();
+        info.set_always_utf8(true);
+        info.set_all_assertions(false);
+        info.set_anchored_start(false);
+        info.set_anchored_end(false);
+        info.set_line_anchored_start(false);
+        info.set_line_anchored_end(false);
+        info.set_any_anchored_start(false);
+        info.set_any_anchored_end(false);
+        info.set_match_empty(false);
+        info.set_literal(false);
+        info.set_alternation_literal(false);
+        Hir {
+            kind: HirKind::Specialization(kind),
+            info,
+        }
+    }
+
     /// Return true if and only if this HIR will always match valid UTF-8.
     ///
     /// When this returns false, then it is possible for this HIR expression
@@ -715,7 +747,8 @@ impl HirKind {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Anchor(_)
-            | HirKind::WordBoundary(_) => false,
+            | HirKind::WordBoundary(_)
+            | HirKind::Specialization(_) => false,
             HirKind::Group(_)
             | HirKind::Repetition(_)
             | HirKind::Concat(_)
@@ -1440,7 +1473,8 @@ impl Drop for Hir {
             | HirKind::Literal(_)
             | HirKind::Class(_)
             | HirKind::Anchor(_)
-            | HirKind::WordBoundary(_) => return,
+            | HirKind::WordBoundary(_)
+            | HirKind::Specialization(_) => return,
             HirKind::Group(ref x) if !x.hir.kind.has_subexprs() => return,
             HirKind::Repetition(ref x) if !x.hir.kind.has_subexprs() => return,
             HirKind::Concat(ref x) if x.is_empty() => return,
@@ -1455,7 +1489,8 @@ impl Drop for Hir {
                 | HirKind::Literal(_)
                 | HirKind::Class(_)
                 | HirKind::Anchor(_)
-                | HirKind::WordBoundary(_) => {}
+                | HirKind::WordBoundary(_)
+                | HirKind::Specialization(_) => {}
                 HirKind::Group(ref mut x) => {
                     stack.push(mem::replace(&mut x.hir, Hir::empty()));
                 }
